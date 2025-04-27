@@ -1,0 +1,26 @@
+{
+  "name": "typing-effects-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@pixi/filter-blur": "^7.4.3",
+    "@pixi/filter-glow": "^5.2.1",
+    "gsap": "^3.12.2",
+    "pixi.js": "^7.2.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-feather": "^2.0.10"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "rollup-plugin-visualizer": "^5.14.0",
+    "vite": "^5.0.0",
+    "vite-plugin-pwa": "^1.0.0",
+    "workbox-window": "^7.3.0"
+  }
+}

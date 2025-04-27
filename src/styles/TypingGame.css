@@ -1,0 +1,101 @@
+/* TypingGame styles */
+.app {
+  margin: calc(50vh - 2rem) 1rem 1rem;
+}
+
+.text {
+  font-size: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 800px;
+  z-index: 2;
+  position: relative;
+  justify-content: flex-start;
+  align-items: flex-start;
+  line-height: 1.5;
+  margin: 0 auto;
+}
+
+.letter {
+  margin: 0 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  position: relative;
+  font-family: "JuliaMono", monospace;
+  display: inline-block;
+}
+
+.letter.active {
+  color: #ffeb3b;
+  text-shadow: 0 0 8px #fff200, 0 0 16px #ffeb3b;
+}
+
+.letter.inactive {
+  color: #aaa;
+  opacity: 0.5;
+}
+
+[data-char="␣"] {
+  font-weight: 900;
+}
+
+.pixi-layer canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cursor {
+  width: 3px;
+  height: 2.4rem;
+  background: white;
+  position: absolute;
+  border-radius: 2px;
+  animation: cursor-pulse 1.5s infinite;
+  box-shadow: 0 0 10px #fff,
+              0 0 20px #fff,
+              0 0 30px #fff;
+  transform: translate(-3px, -50%);
+  transition: top 100ms ease, left 100ms ease;
+}
+
+@keyframes cursor-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.screen {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.expected-char {
+  color: #bbbbbb;
+}
+
+.incorrect-overlay {
+  color: red;
+  opacity: 0.6;
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  width: 100%;
+  text-align: center;
+  z-index: 2;
+}
+
+.screen--hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-60px) scale(0.98);
+  transition: opacity 0.5s cubic-bezier(0.4,0,0.2,1), transform 0.5s cubic-bezier(0.4,0,0.2,1);
+} 
