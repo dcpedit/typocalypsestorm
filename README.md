@@ -1,5 +1,5 @@
+![screenshot](public/images/ts_logo_large.png)
 # Typocalypse Storm
-## Typing test that goes *pew pew pew*
 
 A visually engaging typing practice app built with React, PIXI.js, and GSAP. As you type, enjoy dynamic particle effects, animated lightning, and immersive sound feedback for each keystroke. Great for fun, practice, or as a creative code demo!
 
@@ -12,7 +12,6 @@ A visually engaging typing practice app built with React, PIXI.js, and GSAP. As 
 - **Offline Support**: No internet needed after download.
 
 ## Demo
-![screenshot](public/images/ts_logo_large.png)
 
 ## Getting Started
 
