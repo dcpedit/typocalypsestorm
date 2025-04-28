@@ -81,7 +81,16 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     pixiContainerRef.current.appendChild(app.view);
     pixiAppRef.current = app;
 
+    // Add window resize handler
+    function handleResize() {
+      if (pixiAppRef.current) {
+        pixiAppRef.current.renderer.resize(window.innerWidth, window.innerHeight);
+      }
+    }
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
       app.destroy(true, { children: true });
     };
   }, []);
