@@ -81,11 +81,6 @@
   text-align: center;
 }
 
-.high-scores li:nth-child(1) {
-  background-color: rgba(255, 215, 0, 0.2);
-  color: #ffd700;
-}
-
 .high-scores p {
   color: #aaaaaa;
   text-align: center;
@@ -132,4 +127,32 @@
 
 .hidden {
   display: none !important;
+}
+
+.uncorrected-warning {
+  margin-top: 1.2rem;
+  color: #ffb347;
+  background: rgba(0, 150, 255, 0.12);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 1.08rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0,170,255,0.07);
+  text-align: center;
+  max-width: 350px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.uncorrected-warning strong {
+  color: #00eaff;
+  font-weight: bold;
+}
+
+.user-score {
+  background-color: rgba(0, 255, 170, 0.22) !important;
+  color: #00ffd0 !important;
+  font-weight: bold;
+  border: 2px solid #00ffd0;
+  box-shadow: 0 0 10px #00ffd044, 0 0 20px #00ffd044;
 } 

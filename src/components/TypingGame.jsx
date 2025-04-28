@@ -53,7 +53,6 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const [showResults, setShowResults] = useState(false);
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(null);
-  const [highScores, setHighScores] = useState([]);
   const [gameScreenHidden, setGameScreenHidden] = useState(false);
   const typingTimeoutRef = useRef(null);
   const containerRef = useRef();
@@ -137,28 +136,6 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
         setIsTyping(false);
       }
     }, PAUSE_THRESHOLD); // pause to consider typing stopped
-  };
-
-  // Load high scores from localStorage
-  useEffect(() => {
-    const key = `typing-high-scores-${difficulty}`;
-    const storedScores = localStorage.getItem(key);
-    if (storedScores) {
-      setHighScores(JSON.parse(storedScores));
-    } else {
-      setHighScores([]);
-    }
-  }, [difficulty]);
-
-  // Save high score to localStorage
-  const saveHighScore = (newWpm) => {
-    const key = `typing-high-scores-${difficulty}`;
-    const updatedScores = [...highScores, newWpm]
-      .sort((a, b) => b - a) // Sort in descending order
-      .slice(0, 5); // Keep only top 5 scores
-    
-    localStorage.setItem(key, JSON.stringify(updatedScores));
-    setHighScores(updatedScores);
   };
 
   // Reset game for a new round
@@ -304,11 +281,19 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
         // Calculate WPM and show results after state is updated
         const currentTypedChars = [...newTypedChars];
         const currentStartTime = startTimeRef.current;
-        const correctChars = currentTypedChars.filter(char => char.correct).length;
-        const uncorrectedErrors = currentTypedChars.filter(char => !char.correct).length;
+        // Count uncorrected errors (final incorrect chars)
+        const uncorrectedErrors = currentTypedChars.reduce(
+          (acc, char, idx) => acc + (char.char !== sampleText[idx] ? 1 : 0),
+          0
+        );
+        // Only count correct chars in the final result
+        const correctChars = currentTypedChars.reduce(
+          (acc, char, idx) => acc + (char.char === sampleText[idx] ? 1 : 0),
+          0
+        );
         const totalErrors = totalErrorsRef.current; // Use the total errors including corrected ones
         const timeInMinutes = (now - currentStartTime) / 1000 / 60;
-          
+        
         // Avoid division by zero or negative values
         if (correctChars <= 0 || timeInMinutes <= 0) {
           setWpm(0);
@@ -317,11 +302,10 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
           // Calculate accuracy based on all errors, not just uncorrected ones
           const totalKeystrokes = sampleText.length + (totalErrors - uncorrectedErrors);
           const accuracy = Math.max(0, ((totalKeystrokes - totalErrors) / totalKeystrokes) * 100);
+          // WPM is based on correct, final characters only (uncorrected errors lower the score)
           const calculatedWpm = Math.round((correctChars / 5) / timeInMinutes);
-          
           setWpm(calculatedWpm);
           setAccuracy(accuracy);
-          saveHighScore(calculatedWpm);
         }
         setShowResults(true);
       }
@@ -421,13 +405,6 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     }
   }, [cursorPosition.y]);
 
-  // Clear the localStorage high scores for testing (REMOVE THIS IN PRODUCTION)
-  // For debugging only
-  const clearHighScores = () => {
-    localStorage.removeItem(`typing-high-scores-${difficulty}`);
-    setHighScores([]);
-  };
-
   // Animate game screen out/in when showResults changes
   useEffect(() => {
     if (!screenRef.current) return;
@@ -515,7 +492,6 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
       </div>
       <Results
         wpm={wpm}
-        highScores={highScores}
         difficulty={difficulty}
         accuracy={accuracy}
         show={showResults}
