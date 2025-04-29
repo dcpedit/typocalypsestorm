@@ -66,10 +66,10 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const boltBufferRef = useRef(null);
   const audioContextRef = useRef(null);
   const prevCursorYRef = useRef(0);
-  const resultsRef = useRef(null);
   const resultsVisible = useRef(false);
   const totalErrorsRef = useRef(0); // Track total errors including corrected ones
   const letterRefs = useRef([]); // Array of refs for each letter
+  const [uncorrectedErrors, setUncorrectedErrors] = useState(0);
 
   useEffect(() => {
     const app = new PIXI.Application({
@@ -286,6 +286,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
           (acc, char, idx) => acc + (char.char !== sampleText[idx] ? 1 : 0),
           0
         );
+        setUncorrectedErrors(uncorrectedErrors);
         // Only count correct chars in the final result
         const correctChars = currentTypedChars.reduce(
           (acc, char, idx) => acc + (char.char === sampleText[idx] ? 1 : 0),
@@ -299,13 +300,13 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
           setWpm(0);
           setAccuracy(null);
         } else {
-          // Calculate accuracy based on all errors, not just uncorrected ones
-          const totalKeystrokes = sampleText.length + (totalErrors - uncorrectedErrors);
-          const accuracy = Math.max(0, ((totalKeystrokes - totalErrors) / totalKeystrokes) * 100);
+          // Calculate accuracy based only on uncorrected errors (final incorrect chars)
+          const accuracy = Math.max(0, ((sampleText.length - uncorrectedErrors) / sampleText.length));
           // WPM is based on correct, final characters only (uncorrected errors lower the score)
-          const calculatedWpm = Math.round((correctChars / 5) / timeInMinutes);
+          // Make accuracy a multiplier to encourage correcting mistakes
+          const calculatedWpm = Math.round((correctChars / 5) / timeInMinutes) * accuracy;
           setWpm(calculatedWpm);
-          setAccuracy(accuracy);
+          setAccuracy(accuracy * 100);
         }
         setShowResults(true);
       }
@@ -496,6 +497,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
         accuracy={accuracy}
         show={showResults}
         onDismiss={resetGame}
+        hasUncorrectedErrors={uncorrectedErrors > 0}
       />
     </>
   );

@@ -149,10 +149,22 @@
   font-weight: bold;
 }
 
+@keyframes user-score-pulsate {
+  0%, 100% {
+    box-shadow: 0 0 10px #00ffd044, 0 0 20px #00ffd044;
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 24px #00ffd088, 0 0 40px #00ffd088;
+    opacity: 0.85;
+  }
+}
+
 .user-score {
   background-color: rgba(0, 255, 170, 0.22) !important;
   color: #00ffd0 !important;
   font-weight: bold;
   border: 2px solid #00ffd0;
   box-shadow: 0 0 10px #00ffd044, 0 0 20px #00ffd044;
+  animation: user-score-pulsate 1.2s infinite cubic-bezier(0.4,0,0.2,1);
 } 

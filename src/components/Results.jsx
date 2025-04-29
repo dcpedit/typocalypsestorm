@@ -4,7 +4,7 @@ import '../styles/Results.css';
 
 const labels = ['1st', '2nd', '3rd', '4th', '5th'];
 
-export default function Results({ wpm, difficulty, accuracy, show, onDismiss }) {
+export default function Results({ wpm, difficulty, accuracy, show, onDismiss, hasUncorrectedErrors }) {
   const containerRef = useRef();
   const wpmValueRef = useRef();
   const wpmAnimationDoneRef = useRef(false);
@@ -35,6 +35,20 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss }) 
     // eslint-disable-next-line
   }, [show, wpm, difficulty]);
 
+  // Track when results are shown
+  useEffect(() => {
+    if (show && typeof wpm === 'number' && wpm > 0) {
+      // Send Google Analytics event when results are displayed
+      if (window.gtag) {
+        window.gtag('event', 'results_displayed', {
+          'difficulty': difficulty,
+          'wpm': wpm,
+          'accuracy': accuracy
+        });
+      }
+    }
+  }, [show, wpm, difficulty, accuracy]);
+
   useEffect(() => {
     if (show && containerRef.current) {
       wpmAnimationDoneRef.current = false;
@@ -59,12 +73,27 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss }) 
     }
   }, [show, wpm]);
 
+  // Handle dismiss and send analytics event
+  const handleDismiss = () => {
+    if (!wpmAnimationDoneRef.current) return;
+    
+    // Send Google Analytics event when results are dismissed
+    if (window.gtag) {
+      window.gtag('event', 'results_dismissed', {
+        'difficulty': difficulty,
+        'wpm': wpm
+      });
+    }
+    
+    if (onDismiss) onDismiss();
+  };
+
   useEffect(() => {
     if (!show) return;
     function handleKeyDown(e) {
       if (!wpmAnimationDoneRef.current) return;
       if (e.key === 'Enter' || e.key === 'Escape') {
-        if (onDismiss) onDismiss();
+        handleDismiss();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -86,9 +115,11 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss }) 
               Accuracy: {Math.floor(accuracy)}%
             </div>
           )}
-          <div className="uncorrected-warning">
-            Uncorrected mistakes reduce your WPM. <strong>Use backspace to fix errors!</strong>
-          </div>
+          {hasUncorrectedErrors && (
+            <div className="uncorrected-warning">
+              Uncorrected mistakes reduce your WPM. <strong>Use backspace to fix errors!</strong>
+            </div>
+          )}
         </div>
         <div className="high-scores">
           <h3>High Scores ({difficulty})</h3>
