@@ -1,0 +1,99 @@
+.score-display {
+  position: fixed;
+  top: 100px;
+  right: 48px;
+  z-index: 20;
+  font-family: "JuliaMono", monospace;
+  color: #ffeb3b;
+  text-shadow: 0 0 8px #fff200, 0 0 16px #ffeb3b;
+  letter-spacing: 0.04em;
+  background: transparent;
+  padding: 12px 32px;
+  pointer-events: none;
+  user-select: none;
+  transition: all 0.3s ease;
+  transform: translateY(0);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 25px;
+}
+
+.score-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-label {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.8;
+  margin-bottom: 4px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 4px #fff;
+}
+
+.score-value {
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: 900;
+  animation: score-pulse 2s infinite alternate;
+}
+
+/* Energy Bar Styles */
+.energy-bar {
+  width: 8px;
+  height: 55px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.energy-sections {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+}
+
+.energy-section {
+  width: 100%;
+  flex: 1;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5) inset;
+  transition: background-color 0.5s ease;
+}
+
+.energy-section.active {
+  box-shadow: 0 0 8px currentColor;
+}
+
+.energy-section.blinking {
+  animation: energy-blink 0.4s infinite alternate;
+}
+
+@keyframes score-pulse {
+  0% {
+    text-shadow: 0 0 8px #fff200, 0 0 16px #ffeb3b;
+  }
+  100% {
+    text-shadow: 0 0 12px #fff200, 0 0 24px #ffeb3b;
+  }
+}
+
+@keyframes energy-blink {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 12px currentColor;
+  }
+  100% {
+    opacity: 0.4;
+    box-shadow: 0 0 4px currentColor;
+  }
+} 

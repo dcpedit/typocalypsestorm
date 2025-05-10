@@ -10,7 +10,7 @@ const isLowEnd = false;
 const audioBufferCache = new Map();
 
 export function explodeParticles(app, dotTexture, x, y, colors) {
-  colors = colors || [0xffffff, 0xf8f8ff, 0xf0f0f0, 0xe0e0e0];
+  colors = colors || [0xffffff];
   const PARTICLE_COUNT = isLowEnd ? 15 : 20;
   const PARTICLE_INITIAL_MAX = 0.05;
   const PARTICLE_INITIAL_DELTA = 0.5;
@@ -225,4 +225,143 @@ export function playAudioBuffer(audioContext, audioBuffer) {
   source.buffer = audioBuffer;
   source.connect(audioContext.destination);
   source.start(0);
+}
+
+export function absorbEnergyParticles(app, dotTexture, progress, levelColors) {
+  // Bar is centered horizontally, 320px wide, 18px tall, bottom of screen
+  const barWidth = 320;
+  const barHeight = 18;
+  const barX = window.innerWidth / 2 - barWidth / 2;
+  const barY = window.innerHeight - 16 - barHeight; // 16px margin from bottom
+
+  // Helper: get current level (0, 1, 2)
+  const getCurrentLevel = (progress) => {
+    if (progress >= 200) return 2;
+    if (progress >= 100) return 1;
+    return 0;
+  };
+
+  // Helper: get fill % for each level
+  const getLevelFill = (progress, levelIdx) => {
+    const lower = levelIdx * 100;
+    const upper = (levelIdx + 1) * 100;
+    if (progress <= lower) return 0;
+    if (progress >= upper) return 100;
+    return ((progress - lower) / 100) * 100;
+  };
+
+  // Calculate the end of the progress bar (right edge of the currently filling level)
+  const fillPercent = getLevelFill(progress, getCurrentLevel(progress));
+  const fillPx = (fillPercent / 100) * barWidth;
+  const endX = barX + fillPx;
+  const endY = barY + barHeight / 2;
+
+  // Start from a random point in a ring around the bar, biased above and to the sides
+  let angle;
+  if (Math.random() < 0.75) {
+    // 75% chance: above and sides (-π/2 to +π/2)
+    angle = (-Math.PI / 2) + Math.random() * Math.PI;
+  } else {
+    // 25% chance: below (+π/2 to +3π/2)
+    angle = (Math.PI / 2) + Math.random() * Math.PI;
+  }
+  const radius = 90 + Math.random() * 40;
+  const startX = endX + Math.cos(angle) * radius;
+  const startY = endY + Math.sin(angle) * radius;
+
+  const sprite = new PIXI.Sprite(dotTexture);
+  sprite.anchor.set(0.5);
+  sprite.x = startX;
+  sprite.y = startY;
+  sprite.alpha = 0.7;
+  // For growing effect, set initial scale small
+  const endScale = 0.32 + Math.random() * 0.18;
+  const startScale = 0.08;
+  sprite.scale.set(startScale);
+  // Set tint based on current level color
+  const currentLevel = getCurrentLevel(progress);
+  sprite.tint = levelColors[currentLevel];
+  app.stage.addChild(sprite);
+
+  // Animate toward the end of the bar
+  const duration = 0.7 + Math.random() * 0.2;
+  let elapsed = 0;
+  const startAlpha = sprite.alpha;
+  const ticker = (delta) => {
+    const dt = delta / 60;
+    elapsed += dt;
+    const t = Math.min(1, elapsed / duration);
+    // Ease in
+    sprite.x = startX + (endX - startX) * t * t;
+    sprite.y = startY + (endY - startY) * t * t;
+    sprite.alpha = startAlpha * (1 - t);
+    // Grow as t increases
+    sprite.scale.set(startScale + (endScale - startScale) * t);
+    if (t >= 1) {
+      app.ticker.remove(ticker);
+      app.stage.removeChild(sprite);
+      sprite.destroy();
+    }
+  };
+  app.ticker.add(ticker);
+}
+
+export function createRippleEffect(app, energyBarRef) {
+  if (!energyBarRef.current) return;
+  // Constants for ripple effect
+  const RIPPLE_COLOR = 0xff1744;
+  const NUM_RIPPLES = 2;
+  const RIPPLE_DURATION = 1;
+  const RIPPLE_MAX_SIZE = 8;
+  const RIPPLE_WIDTH = 2;
+  const INITIAL_CORNER_RADIUS = 3;
+
+  // Get the position and dimensions of the energy bar
+  const barRect = energyBarRef.current.getBoundingClientRect();
+  const barWidth = barRect.width;
+  const barHeight = barRect.height;
+  const barX = barRect.left + barWidth / 2; // Center X
+  const barY = barRect.top + barHeight / 2; // Center Y
+
+  // Create ripples
+  for (let i = 0; i < NUM_RIPPLES; i++) {
+    const ripple = new PIXI.Graphics();
+    ripple.lineStyle(RIPPLE_WIDTH, RIPPLE_COLOR, 1);
+    const initialCornerRadius = INITIAL_CORNER_RADIUS;
+    ripple.drawRoundedRect(-barWidth/2, -barHeight/2, barWidth, barHeight, initialCornerRadius);
+    ripple.x = barX;
+    ripple.y = barY;
+    ripple.alpha = 0.8;
+    // Add neon glow filter
+    ripple.filters = [new GlowFilter({ distance: 15, outerStrength: 3, color: RIPPLE_COLOR })];
+    app.stage.addChild(ripple);
+    const initialWidth = barWidth;
+    const initialHeight = barHeight;
+    const maxWidth = barWidth * (1 + RIPPLE_MAX_SIZE);
+    const maxCornerRadius = initialCornerRadius * (maxWidth / initialWidth);
+    const delay = i * 0.15;
+    const startTime = performance.now() + delay * 1000;
+    const duration = RIPPLE_DURATION;
+    const ticker = (delta) => {
+      const now = performance.now();
+      const elapsed = (now - startTime) / 1000;
+      if (elapsed < 0) return;
+      if (elapsed >= duration) {
+        app.ticker.remove(ticker);
+        app.stage.removeChild(ripple);
+        ripple.destroy();
+        return;
+      }
+      const progress = elapsed / duration;
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const sizeDelta = (maxWidth - initialWidth) * easeProgress;
+      const currentWidth = initialWidth + sizeDelta;
+      const currentHeight = initialHeight + sizeDelta;
+      const currentCornerRadius = initialCornerRadius + (maxCornerRadius - initialCornerRadius) * easeProgress;
+      ripple.clear();
+      ripple.lineStyle(RIPPLE_WIDTH, RIPPLE_COLOR, 0.8 * (1 - easeProgress));
+      ripple.drawRoundedRect(-currentWidth / 2, -currentHeight / 2, currentWidth, currentHeight, currentCornerRadius);
+    };
+    app.ticker.add(ticker);
+  }
 } 

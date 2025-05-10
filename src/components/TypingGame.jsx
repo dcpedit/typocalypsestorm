@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import * as PIXI from 'pixi.js';
-import samplesHard from '../data/samples_hard.json';
-import samplesEasy from '../data/samples_easy.json';
 import '../styles/TypingGame.css';
 import { 
   explodeParticles, 
@@ -14,34 +12,9 @@ import {
   playAudioBuffer 
 } from '../utils/effectsUtils';
 import Results from './Results';
-
-// Convert whitespace characters to visible symbols
-function whitespaceToChar(char) {
-  switch(char) {
-    case ' ': return '␣'; // Space
-    case '\t': return '→'; // Tab
-    case '\n': return '⏎'; // Newline
-    default: return char;
-  }
-}
-
-function getRelativePosition(element) {
-  if (!element) return { top: 0, left: 0 };
-  return {
-    top: element.offsetTop || 0,
-    left: element.offsetLeft || 0
-  };
-}
-
-// Helper to get a random sample text based on difficulty
-function getRandomSampleText(difficulty) {
-  const source = difficulty === 'Easy' ? samplesEasy : samplesHard;
-  if (Array.isArray(source) && source.length > 0) {
-    const random = source[Math.floor(Math.random() * source.length)];
-    return random.text;
-  }
-  return '';
-}
+import PowerBar from './PowerBar';
+import { whitespaceToChar, getRelativePosition, getRandomSampleText } from '../utils/gameUtils';
+import ScoreDisplay from './ScoreDisplay';
 
 export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const [sampleText, setSampleText] = useState("");
@@ -70,6 +43,17 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const totalErrorsRef = useRef(0); // Track total errors including corrected ones
   const letterRefs = useRef([]); // Array of refs for each letter
   const [uncorrectedErrors, setUncorrectedErrors] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [score, setScore] = useState(0);
+  const [multiplier, setMultiplier] = useState(1);
+  const [energy, setEnergy] = useState(100); // Add energy state
+  const [incorrectTyped, setIncorrectTyped] = useState(false); // Track incorrect keystrokes
+  const incorrectTimerRef = useRef(null);
+
+  // Constants for score penalty
+  const MAX_ERRORS_FOR_MIN_RATIO = 15; // Number of errors for minimum ratio
+  const MIN_CORRECT_RATIO = 0.5; // Minimum ratio when max errors reached
+  const NORMALIZED_LENGTH = 500;
 
   useEffect(() => {
     const app = new PIXI.Application({
@@ -150,6 +134,10 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     setIsTyping(false);
     totalErrorsRef.current = 0; // Reset the total errors count
     letterRefs.current = []; // Reset letter refs
+    setStreak(0); // Reset streak
+    setScore(0); // Reset score
+    setMultiplier(1); // Reset multiplier
+    setEnergy(100); // Reset energy to full
   };
 
   // Clean up timeout on unmount
@@ -157,6 +145,9 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+      }
+      if (incorrectTimerRef.current) {
+        clearTimeout(incorrectTimerRef.current);
       }
     };
   }, []);
@@ -205,19 +196,47 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
 
   // Set a random sample on mount and when difficulty or reloadKey changes
   useEffect(() => {
-    setSampleText(getRandomSampleText(difficulty));
+    resetGame();
   }, [difficulty, reloadKey]);
 
-  // Reset typedChars when sampleText changes
-  useEffect(() => {
-    setTypedChars([]);
-    startTimeRef.current = null;
-    endTimeRef.current = null;
-    setShowResults(false);
-    resultsVisible.current = false;
-    totalErrorsRef.current = 0; // Reset the total errors count
-    letterRefs.current = []; // Reset letter refs
-  }, [sampleText]);
+  // Function to calculate correctRatio and energy based on number of incorrect characters
+  function calculateEnergyAndRatio(numIncorrect) {
+    let correctRatio;
+    if (numIncorrect <= 0) {
+      correctRatio = 1;
+    } else if (numIncorrect >= MAX_ERRORS_FOR_MIN_RATIO) {
+      correctRatio = MIN_CORRECT_RATIO;
+    } else {
+      correctRatio = 1 - (1 - MIN_CORRECT_RATIO) * (numIncorrect / MAX_ERRORS_FOR_MIN_RATIO);
+    }
+    
+    // Calculate energy based on correctRatio
+    const calculatedEnergy = Math.round(
+      ((correctRatio - MIN_CORRECT_RATIO) / (1 - MIN_CORRECT_RATIO)) * 100
+    );
+    
+    return {
+      correctRatio,
+      energy: Math.max(0, Math.min(100, calculatedEnergy))
+    };
+  }
+
+  function calculateScore({ typedChars, multiplier, sampleTextLength }) {
+    const numCorrect = typedChars.filter(c => c.correct).length + 1; // +1 for this correct char
+    const numTyped = typedChars.length + 1; // +1 for this char
+    const numIncorrect = numTyped - numCorrect;
+
+    // Get correctRatio and energy from shared function
+    const { correctRatio, energy } = calculateEnergyAndRatio(numIncorrect);
+    
+    // Update energy state
+    setEnergy(energy);
+    
+    const rawScore = 5 * multiplier * correctRatio;
+    // Normalize so max possible score is as if sampleTextLength = NORMALIZED_LENGTH
+    // Target max score is 9999
+    return rawScore * (NORMALIZED_LENGTH / sampleTextLength);
+  }
 
   // Handle keyboard events for typing and results dismissal
   useEffect(() => {
@@ -246,6 +265,21 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
             cinderTrail(pixiAppRef.current, dotTextureRef.current, x, y);
           }
           setTypedChars(typedChars.slice(0, -1));
+          setStreak(0); // Reset streak on backspace
+          
+          // Recalculate energy when removing a character with backspace
+          // If we're removing an incorrect character, the total errors might not change
+          const removedChar = typedChars[typedChars.length - 1];
+          
+          // Only reduce total errors if we're removing an incorrect character
+          if (removedChar && !removedChar.correct) {
+            totalErrorsRef.current = Math.max(0, totalErrorsRef.current - 1);
+          }
+          
+          // Calculate energy based on current total errors
+          const { energy } = calculateEnergyAndRatio(totalErrorsRef.current);
+          setEnergy(energy);
+          
           if (soundEnabled) playAudioBuffer(audioContextRef.current, backspaceBufferRef.current);
         }
         return;
@@ -266,6 +300,31 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
       // Track errors
       if (!isCorrect) {
         totalErrorsRef.current++;
+        setStreak(0); // Reset streak on incorrect
+        
+        // Calculate energy based on total errors when typing incorrectly
+        const numIncorrect = totalErrorsRef.current;
+        
+        // Get energy using the shared function
+        const { energy } = calculateEnergyAndRatio(numIncorrect);
+        setEnergy(energy);
+        
+        // Update incorrectTyped state when a key is typed incorrectly
+        setIncorrectTyped(true);
+        
+        // Clear any existing timer
+        if (incorrectTimerRef.current) {
+          clearTimeout(incorrectTimerRef.current);
+        }
+        
+        // Reset the incorrectTyped flag after a short delay
+        incorrectTimerRef.current = setTimeout(() => {
+          setIncorrectTyped(false);
+        }, 300);
+      } else {
+        setStreak(prev => prev + 1); // Increment streak on correct
+        // Add score for correct char, with extra multiplier for accuracy so far
+        setScore(prev => prev + calculateScore({ typedChars, multiplier, sampleTextLength: sampleText.length }));
       }
       
       // Add the new character
@@ -304,7 +363,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
           const accuracy = Math.max(0, ((sampleText.length - uncorrectedErrors) / sampleText.length));
           // WPM is based on correct, final characters only (uncorrected errors lower the score)
           // Make accuracy a multiplier to encourage correcting mistakes
-          const calculatedWpm = Math.round((correctChars / 5) / timeInMinutes) * accuracy;
+          const calculatedWpm = Math.round(((correctChars / 5) / timeInMinutes) * accuracy);
           setWpm(calculatedWpm);
           setAccuracy(accuracy * 100);
         }
@@ -325,13 +384,13 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
             if (soundEnabled) playAudioBuffer(audioContextRef.current, boltBufferRef.current); // Play bolt sound at the start
           }
           else {
-            explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid);
+            explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0xffffff, 0xfffacd, 0xffee99, 0xffdd66]);
             if (soundEnabled) playAudioBuffer(audioContextRef.current, audioBufferRef.current);
           }
           shakeScreen(screenRef.current);
         }
         else {
-          explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0xff3333, 0xff0000, 0xcc0000]);
+          explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0x990000, 0xaa3300, 0xbb5500, 0xcc6600]);
           if (soundEnabled) playAudioBuffer(audioContextRef.current, errorBufferRef.current);
         }
       }
@@ -341,7 +400,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [typedChars, sampleText, soundEnabled, showResults]);
+  }, [typedChars, sampleText, soundEnabled, showResults, multiplier]);
 
   // Move cursor to first character when sampleText changes
   useEffect(() => {
@@ -440,6 +499,13 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
 
   return (
     <>
+      <ScoreDisplay 
+        score={score} 
+        showResults={showResults} 
+        energy={energy} 
+        pixiApp={pixiAppRef.current}
+        incorrectTyped={incorrectTyped}
+      />
       <div
         className={`screen${gameScreenHidden ? ' screen--hidden' : ''}`}
         ref={screenRef}
@@ -498,7 +564,9 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
         show={showResults}
         onDismiss={resetGame}
         hasUncorrectedErrors={uncorrectedErrors > 0}
+        score={score}
       />
+      <PowerBar pixiAppRef={pixiAppRef} streak={streak} onMultiplierChange={setMultiplier} />
     </>
   );
 } 

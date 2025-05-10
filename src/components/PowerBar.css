@@ -1,0 +1,150 @@
+.power-bar-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.power-bar__glow {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  width: 270px;
+  height: 18px;
+  transform: translateX(-50%);
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 0;
+  transition: opacity 0.35s cubic-bezier(.4,2,.6,1), box-shadow 0.35s cubic-bezier(.4,2,.6,1);
+}
+
+.power-bar {
+  width: 320px;
+  height: 18px;
+  overflow: hidden;
+  margin: 16px 0;
+  position: relative;
+  z-index: 2;
+  clip-path: polygon(26px 0px, 294px 0px, 320px 18px, 0px 18px);
+}
+
+.power-bar-outline {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 345.61px;
+  height: 26px;
+  transform: translateX(-50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.power-bar-outline__path {
+  fill: var(--power-bar-outline-fill, aqua);
+  transition: fill 0.3s;
+}
+
+.power-bar__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  transition: transform 0.3s cubic-bezier(.4,2,.6,1);
+  z-index: 4;
+}
+
+.power-bar__fill--level-1 {
+  background: linear-gradient(90deg, var(--level-1-start) 0%, var(--level-1-end) 100%);
+  box-shadow: 0 0 8px var(--level-1-shadow)55;
+}
+.power-bar__fill--level-2 {
+  background: linear-gradient(90deg, var(--level-2-start) 0%, var(--level-2-end) 100%);
+  box-shadow: 0 0 8px var(--level-2-shadow)55;
+}
+.power-bar__fill--level-3 {
+  background: linear-gradient(90deg, var(--level-3-start) 0%, var(--level-3-end) 100%);
+  box-shadow: 0 0 8px var(--level-3-shadow)55;
+}
+.power-bar__fill--level-4 {
+  background: linear-gradient(90deg, var(--level-4-start) 0%, var(--level-4-end) 100%);
+  box-shadow: 0 0 8px var(--level-4-shadow)55;
+}
+
+.power-bar__multiplier-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 44px;
+  z-index: 10;
+  font-family: "JuliaMono", monospace;
+  font-weight: 900;
+  font-size: 1.25rem;
+  text-shadow: 0 2px 8px #000, 0 0 8px #fff8, 0 0 16px currentColor, 0 0 32px currentColor;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  padding: 2px 16px;
+  transition: font-size 0.18s cubic-bezier(.4,2,.6,1);
+}
+
+.power-bar__multiplier-label.level-1 {
+  color: var(--level-1-label);
+}
+.power-bar__multiplier-label.level-2 {
+  color: var(--level-2-label);
+}
+.power-bar__multiplier-label.level-3 {
+  color: var(--level-3-label);
+}
+.power-bar__multiplier-label.level-4 {
+  color: var(--level-4-label);
+}
+
+/* Wrapper for sliding bar effect */
+.power-bar__window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: block;
+  clip-path: polygon(26px 0px, 320px 0px, 320px 18px, 0px 18px);
+}
+
+.power-bar__window--level-1 { left: 0%; width: 100%; }
+.power-bar__window--level-2 { left: 10%; width: 90%; }
+.power-bar__window--level-3 { left: 20%; width: 80%; }
+.power-bar__window--level-4 { left: 30%; width: 70%; }
+
+.power-bar__fill-bar {
+  height: 100%;
+  display: inline-block;
+  background: inherit; /* fallback, will be overridden by parent */
+  border-radius: 10px 0 0 10px;
+}
+
+.power-bar__fill-cap {
+  width: 16px;
+  height: 100%;
+  display: inline-block;
+  /* Gradient will be set by modifier class below */
+}
+
+/* Cap gradients for each level */
+.power-bar__fill-cap--level-1 {
+  background: linear-gradient(90deg, var(--level-1-end) 0%, var(--level-2-start) 100%);
+}
+.power-bar__fill-cap--level-2 {
+  background: linear-gradient(90deg, var(--level-2-end) 0%, var(--level-3-start) 100%);
+}
+.power-bar__fill-cap--level-3 {
+  background: linear-gradient(90deg, var(--level-3-end) 0%, var(--level-4-start) 100%);
+}
+.power-bar__fill-cap--level-4 {
+  background: linear-gradient(90deg, var(--level-4-end) 0%, var(--level-4-end) 100%);
+  /* Last cap stays the same color */
+}
