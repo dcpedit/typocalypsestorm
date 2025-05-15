@@ -109,4 +109,104 @@ export function brightenHexColor(hex, amount = 0.3) {
     return hex.length === 1 ? '0' + hex : hex;
   };
   return parseInt(toHex(r1) + toHex(g1) + toHex(b1), 16);
+}
+
+// Helper to get the base URL for Firebase Functions (Vite: use import.meta.env)
+const FUNCTIONS_BASE_URL = import.meta.env.VITE_FUNCTIONS_BASE_URL || window.location.origin;
+
+// Post a new game score to the server
+export async function postGameScore({ name, difficulty, score, wpm, accuracy }) {
+  // Use the base URL for the function endpoint
+  const res = await fetch(`${FUNCTIONS_BASE_URL}/addGameScore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      difficulty: difficulty.toLowerCase(),
+      score: Math.round(score),
+      wpm: Math.round(wpm),
+      accuracy: Math.floor(accuracy)
+    })
+  });
+  if (!res.ok) throw new Error('Failed to save score');
+  return res.json();
+}
+
+// Update the name for a game score on the server
+export async function updateGameScoreName({ id, newName }) {
+  // Use the base URL for the function endpoint
+  const res = await fetch(`${FUNCTIONS_BASE_URL}/updateGameScoreName`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id,
+      newName
+    })
+  });
+  if (!res.ok) throw new Error('Failed to update name');
+  return res.json();
+}
+
+// Admin: Get game scores with secret key (paginated)
+export async function getGameScoresAdmin({ apiSecretKey, pageSize = 100, pageToken } = {}) {
+  const res = await fetch(`${FUNCTIONS_BASE_URL}/getGameScoresAdmin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiSecretKey, pageSize, pageToken })
+  });
+  if (!res.ok) throw new Error('Failed to fetch admin scores');
+  return res.json();
+}
+
+// Local storage helpers for high scores
+export const DEFAULT_NAME = 'AAA';
+
+export function getHighScores(difficulty) {
+  const key = `typing-scores-${difficulty}`;
+  const storedScores = localStorage.getItem(key);
+  return storedScores ? JSON.parse(storedScores) : [];
+}
+
+export function saveHighScore(difficulty, score, wpm, accuracy, maxEntries = 5) {
+  const key = `typing-scores-${difficulty}`;
+  const prevScores = getHighScores(difficulty);
+  const newScoreEntry = {
+    id: Date.now(),
+    score,
+    wpm,
+    accuracy,
+    name: DEFAULT_NAME
+  };
+  const updatedScores = [...prevScores, newScoreEntry]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxEntries);
+  localStorage.setItem(key, JSON.stringify(updatedScores));
+  const currentEntry = updatedScores.find(entry =>
+    entry.score === score && entry.wpm === wpm && entry.accuracy === accuracy
+  );
+  if (currentEntry) {
+    currentEntry.isCurrent = true;
+  }
+  return updatedScores;
+}
+
+export function updateHighScore(id, name) {
+  const prefix = 'typing-scores-';
+  // Iterate through localStorage keys
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(prefix)) {
+      const stored = localStorage.getItem(key);
+      if (!stored) continue;
+      const scores = JSON.parse(stored);
+      const index = scores.findIndex(entry => entry.id === id);
+      if (index !== -1) {
+        // Update the name and save back
+        scores[index].name = name;
+        localStorage.setItem(key, JSON.stringify(scores));
+        return scores;
+      }
+    }
+  }
+  return null;
 } 

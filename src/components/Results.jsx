@@ -1,72 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import '../styles/Results.css';
+import { postGameScore, updateGameScoreName, saveHighScore, updateHighScore, DEFAULT_NAME } from '../utils/gameUtils';
+import { fetchAndDecodeAudioBuffer, playAudioBuffer } from '../utils/effectsUtils';
 
 const labels = ['1st', '2nd', '3rd', '4th', '5th'];
-const DEFAULT_NAME = 'AAA';
 
-function getHighScores(difficulty) {
-  const key = `typing-scores-${difficulty}`;
-  const storedScores = localStorage.getItem(key);
-  return storedScores ? JSON.parse(storedScores) : [];
-}
-
-function saveHighScore(difficulty, score, wpm, accuracy, maxEntries = 5) {
-  const key = `typing-scores-${difficulty}`;
-  const prevScores = getHighScores(difficulty);
-  const newScoreEntry = {
-    id: Date.now(),
-    score,
-    wpm,
-    accuracy,
-    name: DEFAULT_NAME
-  };
-  const updatedScores = [...prevScores, newScoreEntry]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxEntries);
-  localStorage.setItem(key, JSON.stringify(updatedScores));
-  const currentEntry = updatedScores.find(entry =>
-    entry.score === score && entry.wpm === wpm && entry.accuracy === accuracy
-  );
-  if (currentEntry) {
-    currentEntry.isCurrent = true;
-  }
-  return updatedScores;
-}
-
-function updateHighScore(id, name) {
-  const prefix = 'typing-scores-';
-  // Iterate through localStorage keys
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith(prefix)) {
-      const stored = localStorage.getItem(key);
-      if (!stored) continue;
-      const scores = JSON.parse(stored);
-      const index = scores.findIndex(entry => entry.id === id);
-      if (index !== -1) {
-        // Update the name and save back
-        scores[index].name = name;
-        localStorage.setItem(key, JSON.stringify(scores));
-        return scores;
-      }
-    }
-  }
-  return null;
-}
-
-export default function Results({ wpm, difficulty, accuracy, show, onDismiss, hasUncorrectedErrors, score }) {
+export default function Results({ wpm, difficulty, accuracy, show, onDismiss, hasUncorrectedErrors, score, audioContextRef, soundEnabled }) {
   const containerRef = useRef();
   const wpmValueRef = useRef();
   const wpmAnimationDoneRef = useRef(false);
   const accuracyValueRef = useRef();
   const [highScores, setHighScores] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [loadingScores, setLoadingScores] = useState(false);
   const leaderboardRef = useRef();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [editingScoreIndex, setEditingScoreIndex] = useState(-1);
   const [nameInput, setNameInput] = useState(['A', 'A', 'A']); 
   const [cursorPosition, setCursorPosition] = useState(-1);
+  const correctBufferRef = useRef(null);
+  const incorrectBufferRef = useRef(null);
 
   // Track online status
   useEffect(() => {
@@ -101,29 +55,26 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
     const updatedScores = saveHighScore(difficulty, score, wpm, accuracy);
 
     if (isOnline) {
-      fetch('http://127.0.0.1:5001/typocalypsestorm/us-central1/addGameScore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: DEFAULT_NAME,
-          difficulty: difficulty.toLowerCase(),
-          score: Math.round(score),
-          wpm: Math.round(wpm),
-          accuracy: Math.floor(accuracy)
-        })
+      setLoadingScores(true);
+      postGameScore({
+        name: DEFAULT_NAME,
+        difficulty,
+        score,
+        wpm,
+        accuracy
       })
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to save score');
-          return res.json();
-        })
         .then(data => {
-          console.log('Score saved:', data);
           // If the response contains topScores, update the high scores
           if (data.topScores && Array.isArray(data.topScores)) {
             setHighScores(data.topScores);
           }
+          setLoadingScores(false);
         })
-        .catch(err => console.error('Error saving score:', err));
+        .catch(err => {
+          console.error('Error saving score:', err);
+          setHighScores(updatedScores);
+          setLoadingScores(false);
+        });
     }
     else {
       setHighScores(updatedScores);
@@ -234,87 +185,70 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
   useEffect(() => {
     if (editingScoreIndex === -1) return;
 
-    function handleKeyPress(e) {
-      // Check if cursor is active
-      if (cursorPosition === -1) return;
-      
-      // Allow only alphabet characters
-      if (/^[a-zA-Z]$/.test(e.key)) {
-        // Create a new copy of the name input array
+    function handleKeyDown(e) {
+      // Don't process any keys when not showing results
+      if (!show) return;
+      // Handle alphabetic character input
+      if (/^[a-zA-Z]$/.test(e.key) && cursorPosition !== -1) {
+        // Play correct sound using AudioBuffer
+        if (soundEnabled) {
+          playAudioBuffer(audioContextRef.current, correctBufferRef.current);
+        }
         const newNameInput = [...nameInput];
-        // Update the character at the cursor position with uppercase version
         newNameInput[cursorPosition] = e.key.toUpperCase();
         setNameInput(newNameInput);
-        
-        // Move cursor to next position or finish editing if at the last position
+
         if (cursorPosition < 2) {
           setCursorPosition(cursorPosition + 1);
         } else {
-          // Keep the name editable but hide the cursor after third character
           setCursorPosition(-1);
         }
+        return; // Prevent further handling for this key
       }
-    }
-    
-    function handleKeyDown(e) {
+
       // Handle backspace
       if (e.key === 'Backspace') {
-        // Only handle backspace if we're editing (either with cursor or after completion)
         if (cursorPosition === -1) {
-          // If cursor is hidden (after completing entry), move it back to the last character
+          // Play incorrect sound using AudioBuffer
+          if (soundEnabled) {
+            playAudioBuffer(audioContextRef.current, incorrectBufferRef.current);
+          }
           setCursorPosition(2);
         } else if (cursorPosition > 0) {
-          // Move cursor to previous character
+          // Play incorrect sound using AudioBuffer
+          if (soundEnabled) {
+            playAudioBuffer(audioContextRef.current, incorrectBufferRef.current);
+          }
           setCursorPosition(cursorPosition - 1);
         }
       }
-      
+
       // Handle Enter key to submit the name
       if (e.key === 'Enter') {
-        // Only process if we've entered at least one character
         if (editingScoreIndex !== -1) {
-          // Update the name in the high scores
           const updatedScores = [...highScores];
           updatedScores[editingScoreIndex].name = nameInput.join('');
           setHighScores(updatedScores);
-          console.log(updatedScores,editingScoreIndex);
-          
-          // Send updated name to server - always use the current nameInput
           updateNameOnServer(updatedScores[editingScoreIndex].id, nameInput.join(''));
-          
-          // Finish editing
           setCursorPosition(-1);
         }
       }
     }
 
-    window.addEventListener('keypress', handleKeyPress);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      window.removeEventListener('keypress', handleKeyPress);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [cursorPosition, nameInput, editingScoreIndex, highScores]);
+  }, [cursorPosition, nameInput, editingScoreIndex, highScores, show, soundEnabled]);
 
   // Function to update the name on the server
   const updateNameOnServer = (id, name) => {
     if (isOnline) {
-      fetch('http://127.0.0.1:5001/typocalypsestorm/us-central1/updateGameScoreName', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: id,
-          newName: name
-        })
-      })
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to update name');
-          return res.json();
-        })
-        .then(data => {
-          console.log('Name updated:', data);
-        })
-        .catch(err => console.error('Error updating name:', err));
+      updateGameScoreName({ id, newName: name })
+        .catch(err => {
+          console.error('Error updating name:', err);
+          updateHighScore(id, name);
+        });
     }
     else {
       updateHighScore(id, name);
@@ -343,6 +277,23 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
       </span>
     );
   };
+
+  // Preload correct.mp3 and incorrect.mp3 buffer on mount, using shared audioContextRef
+  useEffect(() => {
+    if (!show || !audioContextRef?.current) {
+      return;
+    }
+
+    Promise.all([
+      fetchAndDecodeAudioBuffer('/sound/correct.mp3', audioContextRef.current),
+      fetchAndDecodeAudioBuffer('/sound/incorrect.mp3', audioContextRef.current)
+    ])
+      .then(([correctBuffer, incorrectBuffer]) => {
+        correctBufferRef.current = correctBuffer;
+        incorrectBufferRef.current = incorrectBuffer;
+      })
+      .catch(err => console.error('Error loading audio:', err));
+  }, [show, audioContextRef]);
 
   return (
     <div
@@ -378,7 +329,12 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
         {showLeaderboard && (
           <div className="high-scores" ref={leaderboardRef}>
             <h3>High Scores ({difficulty})</h3>
-            {highScores.length > 0 ? (
+            {loadingScores ? (
+              <div className="loading-scores">
+                <div className="loading-spinner"></div>
+                <p>Loading scores...</p>
+              </div>
+            ) : highScores.length > 0 ? (
               <ul>
                 {highScores.map((scoreEntry, index) => {
                   // Use the isCurrent property to determine if this is the user's score

@@ -25,7 +25,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const endTimeRef = useRef(null);
   const [showResults, setShowResults] = useState(false);
   const [wpm, setWpm] = useState(0);
-  const [accuracy, setAccuracy] = useState(null);
+  const [rawAccuracy, setRawAccuracy] = useState(null);
   const [gameScreenHidden, setGameScreenHidden] = useState(false);
   const typingTimeoutRef = useRef(null);
   const containerRef = useRef();
@@ -41,6 +41,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const prevCursorYRef = useRef(0);
   const resultsVisible = useRef(false);
   const totalErrorsRef = useRef(0); // Track total errors including corrected ones
+  const rawTotalErrorsRef = useRef(0); // Track all mistakes, never decremented
   const letterRefs = useRef([]); // Array of refs for each letter
   const [uncorrectedErrors, setUncorrectedErrors] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -49,6 +50,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
   const [energy, setEnergy] = useState(100); // Add energy state
   const [incorrectTyped, setIncorrectTyped] = useState(false); // Track incorrect keystrokes
   const incorrectTimerRef = useRef(null);
+  const everCorrectIndicesRef = useRef(new Set()); // Track indices ever typed correctly
 
   // Constants for score penalty
   const MAX_ERRORS_FOR_MIN_RATIO = 15; // Number of errors for minimum ratio
@@ -138,6 +140,8 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     setScore(0); // Reset score
     setMultiplier(1); // Reset multiplier
     setEnergy(100); // Reset energy to full
+    rawTotalErrorsRef.current = 0; // Reset raw error count
+    everCorrectIndicesRef.current = new Set(); // Reset unique correct indices
   };
 
   // Clean up timeout on unmount
@@ -149,6 +153,7 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
       if (incorrectTimerRef.current) {
         clearTimeout(incorrectTimerRef.current);
       }
+      everCorrectIndicesRef.current = new Set(); // Clean up on unmount
     };
   }, []);
 
@@ -221,8 +226,13 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     };
   }
 
-  function calculateScore({ typedChars, multiplier, sampleTextLength }) {
-    const numCorrect = typedChars.filter(c => c.correct).length + 1; // +1 for this correct char
+  function calculateScore({ typedChars, multiplier, sampleTextLength, charIndex }) {
+    // If this char index has already been used for score, return 0
+    if (everCorrectIndicesRef.current.has(charIndex)) {
+      return 0;
+    }
+    // Use the number of unique correct indices for scoring (including this one)
+    const numCorrect = everCorrectIndicesRef.current.size + 1; // +1 for this correct char
     const numTyped = typedChars.length + 1; // +1 for this char
     const numIncorrect = numTyped - numCorrect;
 
@@ -234,168 +244,223 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
     
     const rawScore = 5 * multiplier * correctRatio;
     // Normalize so max possible score is as if sampleTextLength = NORMALIZED_LENGTH
-    // Target max score is 9999
     return rawScore * (NORMALIZED_LENGTH / sampleTextLength);
   }
 
-  // Handle keyboard events for typing and results dismissal
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (showResults) {
-        // Don't process any keys when showing results
-        return;
-      }
-      
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (!sampleText) return;
-      
-      // Track typing activity for header animation
-      handleTypingActivity();
-      
-      // Handle backspace
-      if (e.key === 'Backspace') {
-        if (typedChars.length > 0) {
-          // Get the position of the last character for the cinder effect
-          const lastCharIndex = typedChars.length - 1;
-          const lastCharSpan = letterRefs.current[lastCharIndex];
-          if (lastCharSpan) {
-            const rect = lastCharSpan.getBoundingClientRect();
-            const x = rect.left + rect.width / 2;
-            const y = rect.top + rect.height / 2;
-            cinderTrail(pixiAppRef.current, dotTextureRef.current, x, y);
-          }
-          setTypedChars(typedChars.slice(0, -1));
-          setStreak(0); // Reset streak on backspace
-          
-          // Recalculate energy when removing a character with backspace
-          // If we're removing an incorrect character, the total errors might not change
-          const removedChar = typedChars[typedChars.length - 1];
-          
-          // Only reduce total errors if we're removing an incorrect character
-          if (removedChar && !removedChar.correct) {
-            totalErrorsRef.current = Math.max(0, totalErrorsRef.current - 1);
-          }
-          
-          // Calculate energy based on current total errors
-          const { energy } = calculateEnergyAndRatio(totalErrorsRef.current);
-          setEnergy(energy);
-          
-          if (soundEnabled) playAudioBuffer(audioContextRef.current, backspaceBufferRef.current);
-        }
-        return;
-      }
-      // Only process printable characters
-      if (e.key.length !== 1) return;
-      
-      // Start timer on first keypress if not already started
-      if (!startTimeRef.current) {
-        startTimeRef.current = new Date();
-      }
-      
-      const nextIndex = typedChars.length;
-      const expectedChar = sampleText[nextIndex];
-      if (nextIndex >= sampleText.length) return;
-      const isCorrect = e.key === expectedChar;
-      
-      // Track errors
-      if (!isCorrect) {
-        totalErrorsRef.current++;
-        setStreak(0); // Reset streak on incorrect
-        
-        // Calculate energy based on total errors when typing incorrectly
-        const numIncorrect = totalErrorsRef.current;
-        
-        // Get energy using the shared function
-        const { energy } = calculateEnergyAndRatio(numIncorrect);
-        setEnergy(energy);
-        
-        // Update incorrectTyped state when a key is typed incorrectly
-        setIncorrectTyped(true);
-        
-        // Clear any existing timer
-        if (incorrectTimerRef.current) {
-          clearTimeout(incorrectTimerRef.current);
-        }
-        
-        // Reset the incorrectTyped flag after a short delay
-        incorrectTimerRef.current = setTimeout(() => {
-          setIncorrectTyped(false);
-        }, 300);
-      } else {
-        setStreak(prev => prev + 1); // Increment streak on correct
-        // Add score for correct char, with extra multiplier for accuracy so far
-        setScore(prev => prev + calculateScore({ typedChars, multiplier, sampleTextLength: sampleText.length }));
-      }
-      
-      // Add the new character
-      const newTypedChars = [...typedChars, { char: e.key, correct: isCorrect }];
-      setTypedChars(newTypedChars);
-      
-      // Check if we've completed the sample
-      if (newTypedChars.length === sampleText.length) {
-        resultsVisible.current = true;
-        const now = new Date();
-        endTimeRef.current = now;
-        
-        // Calculate WPM and show results after state is updated
-        const currentTypedChars = [...newTypedChars];
-        const currentStartTime = startTimeRef.current;
-        // Count uncorrected errors (final incorrect chars)
-        const uncorrectedErrors = currentTypedChars.reduce(
-          (acc, char, idx) => acc + (char.char !== sampleText[idx] ? 1 : 0),
-          0
-        );
-        setUncorrectedErrors(uncorrectedErrors);
-        // Only count correct chars in the final result
-        const correctChars = currentTypedChars.reduce(
-          (acc, char, idx) => acc + (char.char === sampleText[idx] ? 1 : 0),
-          0
-        );
-        const totalErrors = totalErrorsRef.current; // Use the total errors including corrected ones
-        const timeInMinutes = (now - currentStartTime) / 1000 / 60;
-        
-        // Avoid division by zero or negative values
-        if (correctChars <= 0 || timeInMinutes <= 0) {
-          setWpm(0);
-          setAccuracy(null);
-        } else {
-          // Calculate accuracy based only on uncorrected errors (final incorrect chars)
-          const accuracy = Math.max(0, ((sampleText.length - uncorrectedErrors) / sampleText.length));
-          // WPM is based on correct, final characters only (uncorrected errors lower the score)
-          // Make accuracy a multiplier to encourage correcting mistakes
-          const calculatedWpm = Math.round(((correctChars / 5) / timeInMinutes) * accuracy);
-          setWpm(calculatedWpm);
-          setAccuracy(accuracy * 100);
-        }
-        setShowResults(true);
-      }
-      
-      // Find the span for the character being typed
-      const span = letterRefs.current[nextIndex];
+  // --- Helper Functions for Key Handling ---
+  function isResetKey(e) {
+    return e.key === 'Enter' || e.key === 'Return' || e.key === 'Escape';
+  }
+
+  function isPrintableChar(e) {
+    return e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+  }
+
+  function handleCtrlBackspace() {
+    // Find the index to delete to (start of previous word)
+    let deleteTo = typedChars.length - 1;
+    // Skip any trailing spaces
+    while (deleteTo >= 0 && typedChars[deleteTo].char === ' ') {
+      deleteTo--;
+    }
+    // Then skip all non-spaces (the word)
+    while (deleteTo >= 0 && typedChars[deleteTo].char !== ' ') {
+      deleteTo--;
+    }
+    // deleteTo now points to the space before the word, or -1
+    const newTypedChars = typedChars.slice(0, deleteTo + 1);
+
+    // Cinder effect for each deleted char
+    for (let i = typedChars.length - 1; i > deleteTo; i--) {
+      const span = letterRefs.current[i];
       if (span) {
         const rect = span.getBoundingClientRect();
         const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height;
-        const yMid = rect.top + rect.height / 2;
-        if (isCorrect) {
-          if (e.key === " ") {
-            strikeLightning(pixiAppRef.current, dotTextureRef.current, x, y);
-            explodeSparks(pixiAppRef.current, dotTextureRef.current, x, y);
-            if (soundEnabled) playAudioBuffer(audioContextRef.current, boltBufferRef.current); // Play bolt sound at the start
-          }
-          else {
-            explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0xffffff, 0xfffacd, 0xffee99, 0xffdd66]);
-            if (soundEnabled) playAudioBuffer(audioContextRef.current, audioBufferRef.current);
-          }
-          shakeScreen(screenRef.current);
-        }
-        else {
-          explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0x990000, 0xaa3300, 0xbb5500, 0xcc6600]);
-          if (soundEnabled) playAudioBuffer(audioContextRef.current, errorBufferRef.current);
-        }
+        const y = rect.top + rect.height / 2;
+        cinderTrail(pixiAppRef.current, dotTextureRef.current, x, y);
       }
     }
 
+    setTypedChars(newTypedChars);
+    setStreak(0); // Reset streak on backspace
+
+    // Recalculate energy and errors for all deleted chars
+    let errorsRemoved = 0;
+    for (let i = deleteTo + 1; i < typedChars.length; i++) {
+      if (!typedChars[i].correct) errorsRemoved++;
+    }
+    totalErrorsRef.current = Math.max(0, totalErrorsRef.current - errorsRemoved);
+
+    // Calculate energy based on current total errors
+    const { energy } = calculateEnergyAndRatio(totalErrorsRef.current);
+    setEnergy(energy);
+
+    if (soundEnabled) playAudioBuffer(audioContextRef.current, backspaceBufferRef.current);
+  }
+
+  function handleSingleBackspace() {
+    // Get the position of the last character for the cinder effect
+    const lastCharIndex = typedChars.length - 1;
+    const lastCharSpan = letterRefs.current[lastCharIndex];
+    if (lastCharSpan) {
+      const rect = lastCharSpan.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      cinderTrail(pixiAppRef.current, dotTextureRef.current, x, y);
+    }
+    setTypedChars(typedChars.slice(0, -1));
+    setStreak(0); // Reset streak on backspace
+
+    // Recalculate energy when removing a character with backspace
+    // If we're removing an incorrect character, the total errors might not change
+    const removedChar = typedChars[typedChars.length - 1];
+    // Only reduce total errors if we're removing an incorrect character
+    if (removedChar && !removedChar.correct) {
+      totalErrorsRef.current = Math.max(0, totalErrorsRef.current - 1);
+    }
+    // Calculate energy based on current total errors
+    const { energy } = calculateEnergyAndRatio(totalErrorsRef.current);
+    setEnergy(energy);
+
+    if (soundEnabled) playAudioBuffer(audioContextRef.current, backspaceBufferRef.current);
+  }
+
+  function handleBackspace(e) {
+    if ((e.ctrlKey || e.metaKey) && typedChars.length > 0) {
+      handleCtrlBackspace();
+      return;
+    }
+    if (typedChars.length > 0) {
+      handleSingleBackspace();
+    }
+  }
+
+  function handleCharacterInput(e) {
+    // Start timer on first keypress if not already started
+    if (!startTimeRef.current) {
+      startTimeRef.current = new Date();
+    }
+    const nextIndex = typedChars.length;
+    const expectedChar = sampleText[nextIndex];
+    if (nextIndex >= sampleText.length) return;
+    const isCorrect = e.key === expectedChar;
+
+    // Track errors
+    if (!isCorrect) {
+      totalErrorsRef.current++;
+      rawTotalErrorsRef.current++; // Increment raw error count (never decremented)
+      setStreak(0); // Reset streak on incorrect
+      // Calculate energy based on total errors when typing incorrectly
+      const numIncorrect = totalErrorsRef.current;
+      // Get energy using the shared function
+      const { energy } = calculateEnergyAndRatio(numIncorrect);
+      setEnergy(energy);
+      // Update incorrectTyped state when a key is typed incorrectly
+      setIncorrectTyped(true);
+      // Clear any existing timer
+      if (incorrectTimerRef.current) {
+        clearTimeout(incorrectTimerRef.current);
+      }
+      // Reset the incorrectTyped flag after a short delay
+      incorrectTimerRef.current = setTimeout(() => {
+        setIncorrectTyped(false);
+      }, 300);
+    } else {
+      setStreak(prev => prev + 1); // Increment streak on correct
+      // Only add score if this index hasn't been used before
+      const scoreToAdd = calculateScore({ typedChars, multiplier, sampleTextLength: sampleText.length, charIndex: nextIndex });
+      if (scoreToAdd > 0) {
+        everCorrectIndicesRef.current.add(nextIndex);
+      }
+      setScore(prev => prev + scoreToAdd);
+    }
+
+    // Add the new character
+    const newTypedChars = [...typedChars, { char: e.key, correct: isCorrect }];
+    setTypedChars(newTypedChars);
+
+    // Check if we've completed the sample
+    if (newTypedChars.length === sampleText.length) {
+      resultsVisible.current = true;
+      const now = new Date();
+      endTimeRef.current = now;
+      // Calculate WPM and show results after state is updated
+      const currentTypedChars = [...newTypedChars];
+      const currentStartTime = startTimeRef.current;
+      // Count uncorrected errors (final incorrect chars)
+      const uncorrectedErrors = currentTypedChars.reduce(
+        (acc, char, idx) => acc + (char.char !== sampleText[idx] ? 1 : 0),
+        0
+      );
+      setUncorrectedErrors(uncorrectedErrors);
+      // Only count correct chars in the final result
+      const correctChars = currentTypedChars.reduce(
+        (acc, char, idx) => acc + (char.char === sampleText[idx] ? 1 : 0),
+        0
+      );
+      const timeInMinutes = (now - currentStartTime) / 1000 / 60;
+      // Calculate rawAccuracy (not affected by corrections, only increments)
+      const rawAccuracyValue = Math.max(0, ((sampleText.length - rawTotalErrorsRef.current) / sampleText.length));
+      setRawAccuracy(rawAccuracyValue * 100);
+      // Avoid division by zero or negative values
+      if (correctChars <= 0 || timeInMinutes <= 0) {
+        setWpm(0);
+        setRawAccuracy(null);
+      } else {
+        // Calculate accuracy based only on uncorrected errors (final incorrect chars)
+        const accuracy = Math.max(0, ((sampleText.length - uncorrectedErrors) / sampleText.length));
+        // WPM is based on correct, final characters only (uncorrected errors lower the score)
+        // Make accuracy a multiplier to encourage correcting mistakes
+        const calculatedWpm = Math.round(((correctChars / 5) / timeInMinutes) * accuracy);
+        setWpm(calculatedWpm);
+        setRawAccuracy(accuracy * 100);
+      }
+      setShowResults(true);
+    }
+
+    // Find the span for the character being typed
+    const span = letterRefs.current[nextIndex];
+    if (span) {
+      const rect = span.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height;
+      const yMid = rect.top + rect.height / 2;
+      if (isCorrect) {
+        if (e.key === " ") {
+          strikeLightning(pixiAppRef.current, dotTextureRef.current, x, y);
+          explodeSparks(pixiAppRef.current, dotTextureRef.current, x, y);
+          if (soundEnabled) playAudioBuffer(audioContextRef.current, boltBufferRef.current); // Play bolt sound at the start
+        }
+        else {
+          explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0xffffff, 0xfffacd, 0xffee99, 0xffdd66]);
+          if (soundEnabled) playAudioBuffer(audioContextRef.current, audioBufferRef.current);
+        }
+        shakeScreen(screenRef.current);
+      }
+      else {
+        explodeParticles(pixiAppRef.current, dotTextureRef.current, x, yMid, [0x990000, 0xaa3300, 0xbb5500, 0xcc6600]);
+        if (soundEnabled) playAudioBuffer(audioContextRef.current, errorBufferRef.current);
+      }
+    }
+  }
+
+  // --- Main Keydown Handler ---
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (showResults) return;
+      if (isResetKey(e)) {
+        resetGame();
+        return;
+      }
+      if (!sampleText) return;
+      handleTypingActivity();
+      if (e.key === 'Backspace') {
+        handleBackspace(e);
+        return;
+      }
+      if (!isPrintableChar(e)) return;
+      handleCharacterInput(e);
+    }
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -560,11 +625,13 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
       <Results
         wpm={wpm}
         difficulty={difficulty}
-        accuracy={accuracy}
+        accuracy={rawAccuracy}
         show={showResults}
         onDismiss={resetGame}
         hasUncorrectedErrors={uncorrectedErrors > 0}
         score={score}
+        audioContextRef={audioContextRef}
+        soundEnabled={soundEnabled}
       />
       <PowerBar pixiAppRef={pixiAppRef} streak={streak} onMultiplierChange={setMultiplier} />
     </>

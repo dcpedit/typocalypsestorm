@@ -1,0 +1,96 @@
+.admin-container {
+  max-width: 1024px;
+  margin: 2rem auto;
+  text-align: center;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 4rem); 
+  color: #e0e0e0;
+}
+
+.admin-form-container {
+  max-width: 400px;
+  margin: 2rem auto;
+  text-align: center;
+  color: #e0e0e0;
+}
+
+.admin-input {
+  padding: 0.5rem;
+  width: 80%;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  border-radius: 4px;
+}
+
+.admin-submit-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #444;
+  color: #e0e0e0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.admin-submit-btn:hover {
+  background-color: #555;
+}
+
+.admin-table {
+  margin: 2rem auto;
+  border-collapse: collapse;
+  width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #222;
+}
+
+.admin-table thead {
+  background-color: #333;
+}
+
+.admin-table th {
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #444;
+  color: #e0e0e0;
+}
+
+.admin-table td {
+  padding: 10px 15px;
+  border-bottom: 1px solid #333;
+  color: #ccc;
+}
+
+.admin-table tbody tr:hover {
+  background-color: #2a2a2a;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-error {
+  color: #ff6b6b;
+}
+
+.admin-load-more-btn {
+  margin: 1rem auto;
+  padding: 0.5rem 1rem;
+  background-color: #333;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.admin-load-more-btn:hover {
+  background-color: #444;
+} 

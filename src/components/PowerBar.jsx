@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import './PowerBar.css';
+import '../styles/PowerBar.css';
 import * as PIXI from 'pixi.js';
 import { absorbEnergyParticles } from '../utils/effectsUtils';
 import { getLevelFill, getMultiplier, brightenHexColor } from '../utils/gameUtils';
@@ -35,8 +35,10 @@ export default function PowerBar({ pixiAppRef, streak, onMultiplierChange }) {
   // Decay progress by 1 per second, only if streak > 0 and progress > 0
   useEffect(() => {
     if (progress <= 0 || streak === 0) return;
-    const DECAY_PER_SEC = 70;
-    //const DECAY_PER_SEC = 1;
+    const BASE_DECAY_PER_SEC = 70;
+    const DECAY_INCREMENT_PER_LEVEL = 20;
+    const currentLevel = getMultiplier(progress); // 1-based
+    const DECAY_PER_SEC = BASE_DECAY_PER_SEC + (DECAY_INCREMENT_PER_LEVEL * (currentLevel - 1));
     const INTERVAL_MS = 33; // ~30fps
     const decayPerTick = (DECAY_PER_SEC * INTERVAL_MS) / 1000;
     const intervalId = setInterval(() => {

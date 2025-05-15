@@ -309,10 +309,10 @@ export function absorbEnergyParticles(app, dotTexture, progress, levelColors) {
 export function createRippleEffect(app, energyBarRef) {
   if (!energyBarRef.current) return;
   // Constants for ripple effect
-  const RIPPLE_COLOR = 0xff1744;
-  const NUM_RIPPLES = 2;
+  const RIPPLE_COLOR = 0xff4040;
+  const NUM_RIPPLES = 3;
   const RIPPLE_DURATION = 1;
-  const RIPPLE_MAX_SIZE = 8;
+  const RIPPLE_MAX_SIZE = 30;
   const RIPPLE_WIDTH = 2;
   const INITIAL_CORNER_RADIUS = 3;
 
@@ -331,7 +331,7 @@ export function createRippleEffect(app, energyBarRef) {
     ripple.drawRoundedRect(-barWidth/2, -barHeight/2, barWidth, barHeight, initialCornerRadius);
     ripple.x = barX;
     ripple.y = barY;
-    ripple.alpha = 0.8;
+    ripple.alpha = 1;
     // Add neon glow filter
     ripple.filters = [new GlowFilter({ distance: 15, outerStrength: 3, color: RIPPLE_COLOR })];
     app.stage.addChild(ripple);

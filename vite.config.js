@@ -22,6 +22,15 @@ export default defineConfig({
             type: 'image/png'
           }
         ]
+      },
+      workbox: {
+        navigateFallback: '/index.html',
+        // ⬇️ exclude specific paths from fallback
+        navigateFallbackDenylist: [
+          /^\/sound\//,
+          /^\/images\//,
+          /^\/fonts\//
+        ]
       }
     })
   ],

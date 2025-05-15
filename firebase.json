@@ -8,6 +8,27 @@
     ],
     "rewrites": [
       {
+        "source": "/addGameScore",
+        "run": {
+          "serviceId": "addgamescore",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/updateGameScoreName",
+        "run": {
+          "serviceId": "updategamescorename",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/getGameScoresAdmin",
+        "run": {
+          "serviceId": "getgamescoresadmin",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
