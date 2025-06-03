@@ -401,7 +401,6 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
       const timeInMinutes = (now - currentStartTime) / 1000 / 60;
       // Calculate rawAccuracy (not affected by corrections, only increments)
       const rawAccuracyValue = Math.max(0, ((sampleText.length - rawTotalErrorsRef.current) / sampleText.length));
-      setRawAccuracy(rawAccuracyValue * 100);
       // Avoid division by zero or negative values
       if (correctChars <= 0 || timeInMinutes <= 0) {
         setWpm(0);
@@ -413,8 +412,9 @@ export default function TypingGame({ soundEnabled, difficulty, reloadKey }) {
         // Make accuracy a multiplier to encourage correcting mistakes
         const calculatedWpm = Math.round(((correctChars / 5) / timeInMinutes) * accuracy);
         setWpm(calculatedWpm);
-        setRawAccuracy(accuracy * 100);
+        setRawAccuracy(rawAccuracyValue * 100);
       }
+      setStreak(0);
       setShowResults(true);
     }
 

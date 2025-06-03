@@ -66,6 +66,7 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
         .then(data => {
           // If the response contains topScores, update the high scores
           if (data.topScores && Array.isArray(data.topScores)) {
+            // score.isCurrent is set on the server-side
             setHighScores(data.topScores);
           }
           setLoadingScores(false);
@@ -157,6 +158,11 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
   useEffect(() => {
     if (!show) return;
     function handleKeyDown(e) {
+      // If currently editing a score name, prevent dismiss on Enter
+      if (editingScoreIndex !== -1 && e.key === 'Enter') {
+        return;
+      }
+
       if (!wpmAnimationDoneRef.current) return;
       if (e.key === 'Enter' || e.key === 'Escape') {
         handleDismiss();
@@ -164,7 +170,7 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [show, onDismiss]);
+  }, [show, onDismiss, editingScoreIndex]);
 
   // Handle name editing functionality
   useEffect(() => {
@@ -231,6 +237,7 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
           setHighScores(updatedScores);
           updateNameOnServer(updatedScores[editingScoreIndex].id, nameInput.join(''));
           setCursorPosition(-1);
+          handleDismiss();
         }
       }
     }
@@ -328,12 +335,13 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
         {/* High Scores Leaderboard - hidden until WPM animation is done */}
         {showLeaderboard && (
           <div className="high-scores" ref={leaderboardRef}>
-            <h3>High Scores ({difficulty})</h3>
+            <h3>Today's High Scores ({difficulty})</h3>
             {loadingScores ? (
-              <div className="loading-scores">
-                <div className="loading-spinner"></div>
-                <p>Loading scores...</p>
-              </div>
+              <ul>
+                {Array(5).fill(0).map((_, index) => (
+                  <li key={index} className="skeleton-score-row">&nbsp;</li>
+                ))}
+              </ul>
             ) : highScores.length > 0 ? (
               <ul>
                 {highScores.map((scoreEntry, index) => {
@@ -364,4 +372,4 @@ export default function Results({ wpm, difficulty, accuracy, show, onDismiss, ha
       </div>
     </div>
   );
-} 
+}
